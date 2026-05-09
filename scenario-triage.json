@@ -1,0 +1,347 @@
+{
+    "name": "AI Customer Support Triage System",
+    "flow": [
+        {
+            "id": 1,
+            "module": "tally:watchNewResponse",
+            "version": 1,
+            "parameters": {
+                "__IMTHOOK__": "YOUR_TALLY_WEBHOOK_ID"
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTHOOK__",
+                        "type": "hook:tally",
+                        "label": "Webhook",
+                        "required": true
+                    }
+                ],
+                "interface": [
+                    {
+                        "name": "eventId",
+                        "type": "text",
+                        "label": "Event ID"
+                    },
+                    {
+                        "name": "responseId",
+                        "type": "text",
+                        "label": "Response ID"
+                    },
+                    {
+                        "name": "submissionId",
+                        "type": "text",
+                        "label": "Submission ID"
+                    },
+                    {
+                        "name": "respondentId",
+                        "type": "text",
+                        "label": "Respondent ID"
+                    },
+                    {
+                        "name": "formId",
+                        "type": "text",
+                        "label": "Form ID"
+                    },
+                    {
+                        "name": "formName",
+                        "type": "text",
+                        "label": "Form Name"
+                    },
+                    {
+                        "name": "createdAt",
+                        "type": "date",
+                        "label": "Created at"
+                    },
+                    {
+                        "name": "fields",
+                        "spec": [
+                            {
+                                "name": "Full Name",
+                                "type": "text"
+                            },
+                            {
+                                "name": "Email Address",
+                                "type": "email"
+                            },
+                            {
+                                "name": "Describe your issue",
+                                "type": "text"
+                            }
+                        ],
+                        "type": "collection",
+                        "label": "Fields"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 4,
+            "module": "http:MakeRequest",
+            "version": 4,
+            "parameters": {
+                "tlsType": "",
+                "proxyKeychain": "",
+                "authenticationType": "noAuth"
+            },
+            "mapper": {
+                "url": "https://api.groq.com/openai/v1/chat/completions",
+                "method": "post",
+                "headers": [
+                    {
+                        "name": "Authorization",
+                        "value": "Bearer YOUR_GROQ_API_KEY"
+                    },
+                    {
+                        "name": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "shareCookies": false,
+                "parseResponse": true,
+                "allowRedirects": true,
+                "stopOnHttpError": true,
+                "jsonStringBodyContent": "{\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a support triage assistant. Respond ONLY with a raw JSON object, no markdown, no backticks, no extra text. Use exactly these values - category must be one of: Billing, Technical, General, Refund. priority must be one of: Low, Medium, High, Urgent. assigned_team must be one of: Billing Team, Tech Team, Customer Success. Format: {\\\"category\\\": \\\"Billing\\\", \\\"priority\\\": \\\"High\\\", \\\"assigned_team\\\": \\\"Billing Team\\\", \\\"draft_reply\\\": \\\"reply here\\\"}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{1.fields.`Describe your issue`}}\"\n    }\n  ]\n}",
+                "requestCompressedContent": true
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                }
+            }
+        },
+        {
+            "id": 20,
+            "module": "json:ParseJSON",
+            "version": 1,
+            "parameters": {
+                "type": "YOUR_DATA_STRUCTURE_ID"
+            },
+            "mapper": {
+                "json": "{{4.data.choices[].message.content}}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 609,
+                    "y": 8
+                },
+                "interface": [
+                    {
+                        "name": "category",
+                        "type": "text",
+                        "label": "Category"
+                    },
+                    {
+                        "name": "priority",
+                        "type": "text",
+                        "label": "Priority"
+                    },
+                    {
+                        "name": "assigned_team",
+                        "type": "text",
+                        "label": "Assigned team"
+                    },
+                    {
+                        "name": "draft_reply",
+                        "type": "text",
+                        "label": "Draft reply"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 6,
+            "module": "airtable:ActionCreateRecord",
+            "version": 3,
+            "parameters": {
+                "__IMTCONN__": "YOUR_AIRTABLE_CONNECTION_ID"
+            },
+            "mapper": {
+                "base": "YOUR_AIRTABLE_BASE_ID",
+                "table": "YOUR_AIRTABLE_TABLE_ID",
+                "record": {
+                    "Status": "New",
+                    "Customer Name": "{{1.fields.`Full Name`}}",
+                    "Submission Time": "{{1.createdAt}}",
+                    "Category": "{{20.category}}",
+                    "Assigned Team": "{{20.assigned_team}}",
+                    "AI Draft Reply": "{{20.draft_reply}}",
+                    "Original Message": "{{1.fields.`Describe your issue`}}",
+                    "Priority": "{{20.priority}}",
+                    "Email": "{{1.fields.`Email Address`}}"
+                },
+                "typecast": false,
+                "useColumnId": false
+            },
+            "metadata": {
+                "designer": {
+                    "x": 924,
+                    "y": 8
+                }
+            }
+        },
+        {
+            "id": 9,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "mapper": null,
+            "metadata": {
+                "designer": {
+                    "x": 1235,
+                    "y": 4
+                }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 10,
+                            "module": "google-email:sendAnEmail",
+                            "version": 4,
+                            "parameters": {
+                                "__IMTCONN__": "YOUR_GMAIL_CONNECTION_ID"
+                            },
+                            "filter": {
+                                "name": "Billing",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{20.category}}",
+                                            "b": "Billing",
+                                            "o": "text:contain:ci"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "to": [
+                                    "BILLING_TEAM_EMAIL@yourdomain.com"
+                                ],
+                                "content": "<p><b>New support ticket received</b></p>\n<p><b>Customer Name:</b> {{1.fields.`Full Name`}}</p>\n<p><b>Email:</b> {{1.fields.`Email Address`}}</p>\n<p><b>Category:</b> {{20.category}}</p>\n<p><b>Priority:</b> {{20.priority}}</p>\n<p><b>Assigned Team:</b> {{20.assigned_team}}</p>\n<p><b>Original Message:</b><br>{{1.fields.`Describe your issue`}}</p>\n<p><b>AI Draft Reply:</b><br>{{20.draft_reply}}</p>",
+                                "subject": "New Billing Ticket - {{20.priority}}",
+                                "bodyType": "rawHtml"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1563,
+                                    "y": -222
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 12,
+                            "module": "google-email:sendAnEmail",
+                            "version": 4,
+                            "parameters": {
+                                "__IMTCONN__": "YOUR_GMAIL_CONNECTION_ID"
+                            },
+                            "filter": {
+                                "name": "Technical",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{20.category}}",
+                                            "b": "Technical",
+                                            "o": "text:contain:ci"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "to": [
+                                    "TECH_TEAM_EMAIL@yourdomain.com"
+                                ],
+                                "content": "<p><b>New support ticket received</b></p>\n<p><b>Customer Name:</b> {{1.fields.`Full Name`}}</p>\n<p><b>Email:</b> {{1.fields.`Email Address`}}</p>\n<p><b>Category:</b> {{20.category}}</p>\n<p><b>Priority:</b> {{20.priority}}</p>\n<p><b>Assigned Team:</b> {{20.assigned_team}}</p>\n<p><b>Original Message:</b><br>{{1.fields.`Describe your issue`}}</p>\n<p><b>AI Draft Reply:</b><br>{{20.draft_reply}}</p>",
+                                "subject": "New Technical Ticket - {{20.priority}}",
+                                "bodyType": "rawHtml"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1579,
+                                    "y": 33
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 13,
+                            "module": "google-email:sendAnEmail",
+                            "version": 4,
+                            "parameters": {
+                                "__IMTCONN__": "YOUR_GMAIL_CONNECTION_ID"
+                            },
+                            "filter": {
+                                "name": "General and Refund",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{20.category}}",
+                                            "b": "General",
+                                            "o": "text:contain:ci"
+                                        }
+                                    ],
+                                    [
+                                        {
+                                            "a": "{{20.category}}",
+                                            "b": "Refund",
+                                            "o": "text:contain:ci"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "to": [
+                                    "CUSTOMER_SUCCESS_EMAIL@yourdomain.com"
+                                ],
+                                "content": "<p><b>New support ticket received</b></p>\n<p><b>Customer Name:</b> {{1.fields.`Full Name`}}</p>\n<p><b>Email:</b> {{1.fields.`Email Address`}}</p>\n<p><b>Category:</b> {{20.category}}</p>\n<p><b>Priority:</b> {{20.priority}}</p>\n<p><b>Assigned Team:</b> {{20.assigned_team}}</p>\n<p><b>Original Message:</b><br>{{1.fields.`Describe your issue`}}</p>\n<p><b>AI Draft Reply:</b><br>{{20.draft_reply}}</p>",
+                                "subject": "New General/Refund Ticket - {{20.priority}}",
+                                "bodyType": "rawHtml"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1563,
+                                    "y": 277
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "us2.make.com",
+        "notes": []
+    }
+}
